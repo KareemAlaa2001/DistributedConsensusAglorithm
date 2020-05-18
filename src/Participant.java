@@ -1,4 +1,17 @@
 public class Participant {
+    int coordPort;
+    int loggerPort;
+    int commsPort;
+    int timeout;
+
+    public Participant(int coordPort, int loggerPort, int commsPort,int timeout) {
+        this.timeout = timeout;
+        this.commsPort = commsPort;
+        this.coordPort = coordPort;
+        this.loggerPort = loggerPort;
+    }
+
+
 
     public static void main(String[] args) {
         if (args.length < 4 ) throw new IllegalArgumentException("Can't have less than 4 args!");

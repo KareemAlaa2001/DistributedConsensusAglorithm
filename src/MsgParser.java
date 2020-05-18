@@ -1,7 +1,4 @@
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class MsgParser {
     public MsgParser() {
@@ -29,18 +26,44 @@ public class MsgParser {
         } else if (firstToken.equals("VOTE")) {
             if (tokenizer.hasMoreTokens()) return parseVoteMessage(msg,tokenizer);
             else return null;
+        }  else if (firstToken.equals("OUTCOME")) {
+            if (tokenizer.hasMoreTokens()) return parseOutcomeMessage(msg,tokenizer);
+            else return null;
         }
+        else return null;
+    }
+
+    private static Message parseOutcomeMessage(String msg, StringTokenizer tokenizer) {
+        String outcome = "";
+        List<Integer> ports = new ArrayList<>();
+
+        outcome = tokenizer.nextToken();
+
+        while (tokenizer.hasMoreTokens()) {
+            ports.add(Integer.parseInt(tokenizer.nextToken()));
+        }
+
+        if (ports.size() == 0) return null;
+
+        return new OutcomeMessage(msg,outcome,ports);
     }
 
     private static Message parseVoteMessage(String msg, StringTokenizer tokenizer) {
 
-        Map<Integer, String> votes;
+        Map<Integer, String> votes = new HashMap<>();
+        int port = 0;
+        String vote = "";
 
-        do {
-            options.add(tokenizer.nextToken());
-        } while (tokenizer.hasMoreTokens());
+       while(tokenizer.hasMoreTokens()) {
+           port = Integer.parseInt(tokenizer.nextToken());
+           if (!tokenizer.hasMoreTokens()) break;
+           vote = tokenizer.nextToken();
+           votes.put(port, vote);
+       }
 
-        return new OptionsMessage(msg, options);
+       if (votes.size() == 0) return null;
+
+       return new VoteMessage(msg, votes);
     }
 
     private static OptionsMessage parseOptionsMessage(String msg, StringTokenizer tokenizer) {
@@ -76,6 +99,10 @@ class JoinMessage extends Message {
         this.message = message;
         this.senderPort = senderPort;
     }
+
+    public int getSenderPort() {
+        return this.senderPort;
+    }
 }
 
 class DetailsMessage extends Message {
@@ -85,6 +112,11 @@ class DetailsMessage extends Message {
         this.message = message;
         this.ports = ports;
     }
+
+    public List<Integer> getPorts() {
+        return ports;
+    }
+
 }
 
 class OptionsMessage extends Message {
@@ -94,16 +126,22 @@ class OptionsMessage extends Message {
         this.message = message;
         this.options = options;
     }
+
+    public List<String> getOptions() {
+        return options;
+    }
 }
 
 class VoteMessage extends Message {
-    int senderPort;
     Map<Integer, String> votes;
 
-    public VoteMessage(String message, int senderPort, Map<Integer,String > votes) {
+    public VoteMessage(String message, Map<Integer,String > votes) {
         this.message = message;
-        this.senderPort = senderPort;
         this.votes  = votes;
+    }
+
+    public Map<Integer, String> getVotes() {
+        return votes;
     }
 }
 
@@ -115,5 +153,13 @@ class OutcomeMessage extends Message {
         this.message = message;
         this.outcome = outcome;
         this.ports = ports;
+    }
+
+    public String getOutcome() {
+        return outcome;
+    }
+
+    public List<Integer> getPorts() {
+        return ports;
     }
 }
