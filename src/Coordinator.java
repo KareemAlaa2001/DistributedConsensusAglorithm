@@ -33,21 +33,24 @@ public class Coordinator {
     {
         ServerSocket listener = new ServerSocket(port);
 
-        while (true) {
+        while (!allConnected) {
             Socket client = listener.accept();
             CoordinatorThread clientThread = new CoordinatorThread(client);
             clientThread.start();
         }
+
+        listener.close();
     }
 
     public static void main(String[] args) throws IOException {
-        if (args.length < 4 ) throw new IllegalArgumentException("Can't have less than 4 args!");
+        if (args.length < 5 ) throw new IllegalArgumentException("Can't have less than 5 args!");
 
         int coordPort = Integer.parseInt(args[0]);
         int loggerPort = Integer.parseInt(args[1]);
         int numParticipants = Integer.parseInt(args[2]);
+        int timeout = Integer.parseInt(args[3]);
 
-        List<String> options = Arrays.asList(Arrays.copyOfRange(args, 3, args.length));
+        List<String> options = Arrays.asList(Arrays.copyOfRange(args, 4, args.length));
 
         Coordinator coordinator = new Coordinator(coordPort,loggerPort,numParticipants,options);
         coordinator.startListening(coordPort);
@@ -72,6 +75,7 @@ public class Coordinator {
             broadcastParticipantDetails();
             broadcastVoteRequest();
             notifyAll();
+            System.out.println("All participants have joined the coordinator");
         }
 
         return true;
@@ -106,7 +110,7 @@ public class Coordinator {
     private synchronized void updateOutcomes(OutcomeMessage outcome) {
         if (this.outcomeMessages.size() < this.numParticipants)
             this.outcomeMessages.add(outcome);
-        else return; // todo decide whether to throw error
+        else throw new IllegalStateException("Somehow received an extra outcome message!"); // todo decide whether to throw error
 
         if (this.outcomeMessages.size() == this.numParticipants) {
             decideFinalOutcome();
@@ -117,10 +121,14 @@ public class Coordinator {
         String outcome = this.outcomeMessages.get(0).getOutcome();
 
         for (OutcomeMessage outcomeMessage : this.outcomeMessages) {
-            if (!outcomeMessage.getOutcome().equals(outcome)) return false;
+            if (!outcomeMessage.getOutcome().equals(outcome)) {
+                System.out.println("Somehow one of the outcomes received by the coordinator doesn't match the rest!!");
+                return false;
+            }
         }
 
         this.finalOutcome = outcome;
+        System.out.println("Coordinator has decided its final outcome to be: " + outcome);
         return true;
     }
 
@@ -139,6 +147,7 @@ public class Coordinator {
     private synchronized void broadcastMessage(String msg) {
         for (Map.Entry<Integer,PrintWriter> entry: connectedPorts.entrySet()) {
             entry.getValue().println(msg);
+            entry.getValue().flush();
         }
     }
 
@@ -161,10 +170,10 @@ public class Coordinator {
 
         public CoordinatorThread(Socket client) throws IOException {
             clientSocket = client;
-            //  buffered reader for string input from client
+            //  buffered reader for string input from participant
             inpReader = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
 
-            //  print writer for string output to client
+            //  print writer for string output to participant
             outWriter = new PrintWriter( new OutputStreamWriter( client.getOutputStream() ) );
 
             outWriter.flush();
@@ -174,34 +183,36 @@ public class Coordinator {
 
         public void run() {
             try {
+
                 String firstMessage = inpReader.readLine();
+
                 if (!isJoinMessage(firstMessage)) {
                     clientSocket.close();
                     return;
                 }
 
+
+
                 JoinMessage joinMessage = (JoinMessage) MsgParser.parseMessage(firstMessage);
 
+
                 if (!register(joinMessage.getSenderPort(),this.outWriter)) {
+                    System.out.println("Problem encountered by coordinator while trying to register participant " + joinMessage.getSenderPort());
                     clientSocket.close();
                     return;
                 }
 
                 waitUntilAllNotified();
 
-                System.out.println("Thread " + joinMessage.getSenderPort() + "Has been notified of all participants joining");
-
                 String recMsg = "";
                 recMsg = inpReader.readLine();
 
-                while (!(MsgParser.parseMessage(recMsg) instanceof OutcomeMessage)) {
-                    //  invalid message received, todo decide whether to ignore or throw exception
-                    recMsg = inpReader.readLine();
-                }
-
                 OutcomeMessage outcome = (OutcomeMessage) MsgParser.parseMessage(recMsg);
 
+                System.out.println("Coordinator received outcome " + outcome.getOutcome() + " from participant " + joinMessage.getSenderPort());
                 updateOutcomes(outcome);
+
+                clientSocket.close();
 
             } catch (IOException ioe) {
                 ioe.printStackTrace();
