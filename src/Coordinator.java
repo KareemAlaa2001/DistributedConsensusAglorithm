@@ -13,11 +13,13 @@ public class Coordinator {
     private int numParticipants;
     private List<String> voteOptions;
     volatile Map<Integer, PrintWriter> connectedPorts;
+    volatile List<Socket> connectedSockets;
     private volatile boolean allConnected;
     private volatile ArrayList<OutcomeMessage> outcomeMessages;
     private volatile String finalOutcome;
+    CoordinatorLogger logger;
 
-    public Coordinator(int coordPort, int loggerPort, int numParticipants, List<String> options) {
+    public Coordinator(int coordPort, int loggerPort, int numParticipants, int timeout, List<String> options) throws IOException {
         this.coordPort = coordPort;
         this.loggerPort = loggerPort;
         this.numParticipants = numParticipants;
@@ -26,15 +28,19 @@ public class Coordinator {
         outcomeMessages = new ArrayList<>();
         allConnected = false;
         finalOutcome = "";
+        CoordinatorLogger.initLogger(loggerPort,coordPort,timeout);
+        logger = CoordinatorLogger.getLogger();
+        connectedSockets = new ArrayList<>();
     }
 
     //  Listens out for client connections, making sure joins are sent.
     public void startListening(int port) throws IOException
     {
         ServerSocket listener = new ServerSocket(port);
-
+        logger.startedListening(port);
         while (!allConnected) {
             Socket client = listener.accept();
+            logger.connectionAccepted(client.getPort());
             CoordinatorThread clientThread = new CoordinatorThread(client);
             clientThread.start();
         }
@@ -52,12 +58,12 @@ public class Coordinator {
 
         List<String> options = Arrays.asList(Arrays.copyOfRange(args, 4, args.length));
 
-        Coordinator coordinator = new Coordinator(coordPort,loggerPort,numParticipants,options);
+        Coordinator coordinator = new Coordinator(coordPort,loggerPort,numParticipants,timeout, options);
         coordinator.startListening(coordPort);
     }
 
 
-    private synchronized boolean register(Integer port, PrintWriter outWriter) {
+    private synchronized boolean register(Integer port, Socket portSocket, PrintWriter outWriter) {
         if (this.connectedPorts.size() >= numParticipants)
             return false;
         if (connectedPorts.containsKey(port)) {
@@ -65,6 +71,7 @@ public class Coordinator {
         }
         try {
             connectedPorts.put(port, outWriter);
+            connectedSockets.add(portSocket);
         }
         catch (NullPointerException e) {
             return false;
@@ -101,6 +108,12 @@ public class Coordinator {
 
         for (Integer i: connectedPorts.keySet()) {
             detailsMsg += " " + i.toString();
+        }
+
+        List<Integer> portList = new ArrayList<>(connectedPorts.keySet());
+
+        for (Integer port: portList) {
+            logger.detailsSent(port, portList);
         }
 
         broadcastMessage(detailsMsg);
@@ -141,6 +154,12 @@ public class Coordinator {
             optionsMsg += " " + voteOption;
         }
 
+        List<Integer> portList = new ArrayList<>(connectedPorts.keySet());
+
+        for (Integer port: portList) {
+            logger.voteOptionsSent(port, voteOptions);
+        }
+
         broadcastMessage(optionsMsg);
     }
 
@@ -148,6 +167,10 @@ public class Coordinator {
         for (Map.Entry<Integer,PrintWriter> entry: connectedPorts.entrySet()) {
             entry.getValue().println(msg);
             entry.getValue().flush();
+        }
+
+        for (Socket socket: this.connectedSockets) {
+            logger.messageSent(socket.getPort(), msg);
         }
     }
 
@@ -185,18 +208,18 @@ public class Coordinator {
             try {
 
                 String firstMessage = inpReader.readLine();
+                logger.messageReceived(clientSocket.getPort(),firstMessage);
 
                 if (!isJoinMessage(firstMessage)) {
                     clientSocket.close();
                     return;
                 }
 
-
-
                 JoinMessage joinMessage = (JoinMessage) MsgParser.parseMessage(firstMessage);
+                logger.joinReceived(joinMessage.getSenderPort());
 
 
-                if (!register(joinMessage.getSenderPort(),this.outWriter)) {
+                if (!register(joinMessage.getSenderPort(), this.clientSocket, this.outWriter)) {
                     System.out.println("Problem encountered by coordinator while trying to register participant " + joinMessage.getSenderPort());
                     clientSocket.close();
                     return;
@@ -206,8 +229,11 @@ public class Coordinator {
 
                 String recMsg = "";
                 recMsg = inpReader.readLine();
+                logger.messageReceived(clientSocket.getPort(),recMsg);
+
 
                 OutcomeMessage outcome = (OutcomeMessage) MsgParser.parseMessage(recMsg);
+                logger.outcomeReceived(joinMessage.getSenderPort(),outcome.getOutcome());
 
                 System.out.println("Coordinator received outcome " + outcome.getOutcome() + " from participant " + joinMessage.getSenderPort());
                 updateOutcomes(outcome);

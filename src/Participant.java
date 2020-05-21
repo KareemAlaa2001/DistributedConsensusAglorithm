@@ -5,6 +5,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /*
@@ -159,8 +160,16 @@ public class Participant {
         return savedVotePorts;
     }
 
+    private List<Vote> fromVoteMessage(VoteMessage voteMessage) {
+        List<Vote> msgVotes = new ArrayList<>();
+        for (Map.Entry<Integer,String> vote: voteMessage.getVotes().entrySet()) {
+            msgVotes.add(new Vote(vote.getKey(),vote.getValue()));
+        }
+        return msgVotes;
+    }
+
     private synchronized void processVoteMessage(VoteMessage voteMsg) {
-        List<Vote> receivedVotes = Vote.fromVoteMessage(voteMsg);
+        List<Vote> receivedVotes = fromVoteMessage(voteMsg);
         for (Vote vote: receivedVotes) {
             if (!getSavedVotePorts().contains(vote.getParticipantPort())) {
                 newVotes.add(vote);
@@ -229,7 +238,7 @@ public class Participant {
                 + " and the first vote message has been sent. My choice: " + this.voteChoice);
 
         try {
-            this.listenerLatch.await();
+            this.listenerLatch.await(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -248,7 +257,7 @@ public class Participant {
             broadcastMessage(voteMessage);
             System.out.println("Participant " + this.commsPort + "sent out vote message " + voteMessage + " for round " + (i+1) );
             try {
-                this.listenerLatch.await();
+                this.listenerLatch.await(timeout, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
