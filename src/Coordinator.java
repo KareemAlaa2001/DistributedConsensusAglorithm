@@ -1,6 +1,8 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.*;
 
 /*  ROLE: initiates a run of the consensus algorithm and collects the vote outcome
@@ -38,14 +40,19 @@ public class Coordinator {
     {
         ServerSocket listener = new ServerSocket(port);
         logger.startedListening(port);
-        while (!allConnected) {
+        while (!checkAllConnected()) {
             Socket client = listener.accept();
             logger.connectionAccepted(client.getPort());
             CoordinatorThread clientThread = new CoordinatorThread(client);
             clientThread.start();
         }
-
+        System.out.println("Coordinator reporting all connected, closing listener server socket");
         listener.close();
+    }
+
+    private synchronized boolean checkAllConnected() {
+        if (allConnected) return true;
+        else return false;
     }
 
     public static void main(String[] args) throws IOException {
@@ -228,7 +235,14 @@ public class Coordinator {
                 waitUntilAllNotified();
 
                 String recMsg = "";
-                recMsg = inpReader.readLine();
+                try {
+                    recMsg = inpReader.readLine();
+                } catch (SocketException se) {
+                    logger.participantCrashed(joinMessage.getSenderPort());
+                    clientSocket.close();
+                    return;
+                }
+
                 logger.messageReceived(clientSocket.getPort(),recMsg);
 
 
@@ -239,6 +253,8 @@ public class Coordinator {
                 updateOutcomes(outcome);
 
                 clientSocket.close();
+                System.out.println("Exiting coordinator program");
+                System.exit(0);
 
             } catch (IOException ioe) {
                 ioe.printStackTrace();

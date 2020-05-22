@@ -143,6 +143,12 @@ class VoteMessage extends Message {
     public Map<Integer, String> getVotes() {
         return votes;
     }
+
+    public List<Vote> constructVoteList() {
+        List<Vote> voteList = new ArrayList<>();
+        this.votes.forEach((p,v) -> voteList.add(new Vote(p,v)));
+        return voteList;
+    }
 }
 
 class OutcomeMessage extends Message {
