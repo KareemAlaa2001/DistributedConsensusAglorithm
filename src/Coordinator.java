@@ -46,7 +46,6 @@ public class Coordinator {
             CoordinatorThread clientThread = new CoordinatorThread(client);
             clientThread.start();
         }
-        System.out.println("Coordinator reporting all connected, closing listener server socket");
         listener.close();
     }
 
@@ -89,7 +88,6 @@ public class Coordinator {
             broadcastParticipantDetails();
             broadcastVoteRequest();
             notifyAll();
-            System.out.println("All participants have joined the coordinator");
         }
 
         return true;
@@ -142,13 +140,11 @@ public class Coordinator {
 
         for (OutcomeMessage outcomeMessage : this.outcomeMessages) {
             if (!outcomeMessage.getOutcome().equals(outcome)) {
-                System.out.println("Somehow one of the outcomes received by the coordinator doesn't match the rest!!");
                 return false;
             }
         }
 
         this.finalOutcome = outcome;
-        System.out.println("Coordinator has decided its final outcome to be: " + outcome);
         return true;
     }
 
@@ -227,7 +223,6 @@ public class Coordinator {
 
 
                 if (!register(joinMessage.getSenderPort(), this.clientSocket, this.outWriter)) {
-                    System.out.println("Problem encountered by coordinator while trying to register participant " + joinMessage.getSenderPort());
                     clientSocket.close();
                     return;
                 }
@@ -249,11 +244,9 @@ public class Coordinator {
                 OutcomeMessage outcome = (OutcomeMessage) MsgParser.parseMessage(recMsg);
                 logger.outcomeReceived(joinMessage.getSenderPort(),outcome.getOutcome());
 
-                System.out.println("Coordinator received outcome " + outcome.getOutcome() + " from participant " + joinMessage.getSenderPort());
                 updateOutcomes(outcome);
 
                 clientSocket.close();
-                System.out.println("Exiting coordinator program");
                 System.exit(0);
 
             } catch (IOException ioe) {

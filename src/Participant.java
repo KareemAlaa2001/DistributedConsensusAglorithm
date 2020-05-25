@@ -105,7 +105,6 @@ public class Participant {
             }
         }
 
-        System.out.println("All other participants have connected to " + this.commsPort);
     }
 
     private synchronized boolean serverLoopCheck() {
@@ -249,16 +248,6 @@ public class Participant {
         }
     }
 
-    private boolean willCrash() {
-        Random random = new Random();
-        int i = random.nextInt(4);
-        if (i == 1) {
-            System.out.println(this.commsPort + " will now crash");
-            return true;
-        }
-        else return false;
-    }
-
     public void startVoting() {
         /*
          *  Repeat for the number of voting rounds:
@@ -272,7 +261,6 @@ public class Participant {
         }
         logger.beginRound(1);
 
-        if (willCrash()) System.exit(0);
 
         broadcastMessage("VOTE " + this.commsPort + " " + this.voteChoice);
 
@@ -284,8 +272,6 @@ public class Participant {
         }
         votesSent.clear();
 
-        System.out.println("Voting has begun for participant " + this.commsPort
-                + " and the first vote message has been sent. My choice: " + this.voteChoice);
 
         try {
             this.listenerLatch.await(timeout, TimeUnit.MILLISECONDS);
@@ -293,13 +279,11 @@ public class Participant {
             e.printStackTrace();
         }
 
-        System.out.println("First round of voting successfully complete for participant " + this.commsPort
-                + ". Votes received: " + printAllVotes());
 
         logger.endRound(1);
 
         try {
-            Thread.sleep(timeout/2);
+            Thread.sleep(timeout*3/4);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -313,7 +297,6 @@ public class Participant {
                 listenerMonitor.notifyAll();
             }
             logger.beginRound(i+1);
-            if (willCrash()) System.exit(0);
 
             broadcastMessage(voteMessage);
 
@@ -323,7 +306,6 @@ public class Participant {
             }
             votesSent.clear();
 
-            System.out.println("Participant " + this.commsPort + "sent out vote message " + voteMessage + " for round " + (i+1) );
             try {
                 this.listenerLatch.await(2*timeout, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
@@ -333,7 +315,7 @@ public class Participant {
 
             logger.endRound(i+1);
             try {
-                Thread.sleep(timeout/2);
+                Thread.sleep(timeout*3/4);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -360,7 +342,6 @@ public class Participant {
 
         this.votingComplete = true;
 
-        System.out.println("Voting has ended on participant " + this.commsPort + ". Final outcome: " + this.finalOutcome);
 
         synchronized (coordThreadMonitor) {
             coordThreadMonitor.notifyAll();
@@ -453,13 +434,11 @@ public class Participant {
                         recMsg = inpReader.readLine();
                     } catch (SocketTimeoutException ste) {
                         logger.participantCrashed(otherServer.getPort());
-                        System.out.println(commsPort + " has detected a crash in participant " + otherServer.getPort());
                         listenerLatch.countDown();
                         otherServer.close();
                         return;
                     } catch (SocketException se) {
                         logger.participantCrashed(otherServer.getPort());
-                        System.out.println(commsPort + " has detected a crash in participant " + otherServer.getPort());
                         listenerLatch.countDown();
                         otherServer.close();
                         return;
@@ -537,14 +516,12 @@ public class Participant {
 
                 waitForVotingToEnd();
 
-                System.out.println("Coord comms thread notified so voting should have ended by now");
 
                 outWriter.println(createFinalOutcomeMessage());
                 outWriter.flush();
 
                 logger.outcomeNotified(finalOutcome, getSavedVotePorts());
 
-                System.out.println("Participant " + commsPort + " sent final outcome to coordinator, closing socket");
                 coordinatorSocket.close();
 
             } catch (IOException ioe) {
